@@ -1,12 +1,20 @@
+#!/usr/bin/env python3
+"""
+Subtitle Refiner - 字幕去口语化与术语标准化
+"""
+
 import re
 import subprocess
 import tempfile
 import os
+import sys
+import json
+from datetime import datetime
 
 class SubtitleRefinerSkill:
 
     name = "subtitle_refiner"
-    description = "字幕去口语化与术语标准化，保持时间戳不变，并发送至飞书"
+    description = "字幕去口语化与术语标准化，保持时间戳不变"
 
     FILLER_WORDS = ["嗯", "啊", "那个", "就是", "然后", "呃"]
 
@@ -45,11 +53,11 @@ class SubtitleRefinerSkill:
 
 
     # ======================
-    # 调用 OpenClaw 内置模型
+    # 文本优化
     # ======================
 
     def refine_text(self, text):
-        # 方法 1: 使用字典规则（快速、免费）
+        """删除口语词和多余表达"""
         cleaned = text
         for word in self.FILLER_WORDS:
             # 匹配：口气词 + 可选的逗号/句号 + 可选的空格
@@ -66,50 +74,47 @@ class SubtitleRefinerSkill:
 
 
     # ======================
-    # 新增：处理并发送文件
+    # 发送文件到飞书
     # ======================
 
-    def process_and_send(self, srt_content: str, original_filename: str, chat_id: str):
-        """
-        完整的处理流程：
-        1. 处理字幕
-        2. 发送优化后的文件
-        3. 发送优化概要
-        """
-        # 步骤 1: 处理字幕
-        new_srt, summary = self.run(srt_content, return_summary=True)
-
-        # 步骤 2: 发送优化后的文件
-        output_filename = self.send_optimized_file(new_srt, original_filename, chat_id)
-
-        # 步骤 3: 发送优化概要
-        self.send_summary(summary, chat_id, output_filename)
-
-        return output_filename
-
-    def send_optimized_file(self, srt_content: str, original_filename: str, chat_id: str):
+    def send_optimized_file(self, srt_content: str, original_filename: str, chat_id: str, skill_dir: str, source_path: str = None):
         """
         发送优化后的文件
 
-        使用 media/inbound 目录作为文件存储位置
+        参数：
+            srt_content: 优化后的 SRT 内容
+            original_filename: 原始文件名
+            chat_id: 飞书聊天 ID
+            skill_dir: Skill 目录路径
+            source_path: 源文件路径（可选）
         """
-        import uuid
+        # 确保 subtitle 和 subtitle_refine 文件夹存在
+        subtitle_dir = os.path.join(skill_dir, 'subtitle')
+        subtitle_refine_dir = os.path.join(skill_dir, 'subtitle_refine')
+        os.makedirs(subtitle_dir, exist_ok=True)
+        os.makedirs(subtitle_refine_dir, exist_ok=True)
 
-        # 生成输出文件名
-        name_part = original_filename.replace('.srt', '').replace('.SRT', '')
-        output_filename = f"{name_part}_优化后.srt"
+        # 去掉文件名中的 UUID 后缀：---<UUID格式>
+        clean_filename = re.sub(r'---[a-f0-9-]+$', '', original_filename)
 
-        # 保存到 media/inbound 目录
-        media_dir = "/home/pi/.openclaw/media/inbound"
-        unique_suffix = str(uuid.uuid4())[:12]
-        file_path = os.path.join(media_dir, f"{name_part}---{unique_suffix}")
+        # 获取当前时间戳
+        timestamp = datetime.now().strftime('%Y%m%d%H%M')
 
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(srt_content)
+        # 生成输出文件名：源文件名_优化+时间戳
+        name_part = clean_filename.replace('.srt', '').replace('.SRT', '')
+        output_filename = f"{name_part}_优化{timestamp}.srt"
 
-        # 同时保存为标准文件名（如果已存在则覆盖）
-        standard_path = os.path.join(media_dir, output_filename)
-        with open(standard_path, 'w', encoding='utf-8') as f:
+        # 保存源文件到 subtitle 目录（如果提供了源路径）
+        if source_path and os.path.exists(source_path):
+            source_dest = os.path.join(subtitle_dir, clean_filename)
+            with open(source_path, 'r', encoding='utf-8') as f:
+                source_content = f.read()
+            with open(source_dest, 'w', encoding='utf-8') as f:
+                f.write(source_content)
+
+        # 保存优化后的文件到 subtitle_refine 目录
+        refined_path = os.path.join(subtitle_refine_dir, output_filename)
+        with open(refined_path, 'w', encoding='utf-8') as f:
             f.write(srt_content)
 
         # 发送文件
@@ -118,7 +123,7 @@ class SubtitleRefinerSkill:
             '--channel', 'feishu',
             '--target', chat_id,
             '--message', f'📄 优化后的字幕文件 {output_filename}\n\n请查收！',
-            '--media', standard_path
+            '--media', refined_path
         ]
 
         result = subprocess.run(cmd, capture_output=True, text=True)
@@ -136,7 +141,7 @@ class SubtitleRefinerSkill:
         subprocess.run(cmd, capture_output=True, text=True)
 
     # ======================
-    # 主入口（保持向后兼容）
+    # 主处理逻辑
     # ======================
 
     def run(self, srt_content: str, return_summary: bool = True):
@@ -181,9 +186,6 @@ class SubtitleRefinerSkill:
         if return_summary:
             summary = self.generate_summary(parsed, changes, filler_stats, term_stats)
             return new_srt, summary
-
-        # 如果需要发送到飞书，取消下面的注释
-        # self.send_to_feishu(new_srt)
 
         return new_srt
 
@@ -234,50 +236,63 @@ class SubtitleRefinerSkill:
 
         return summary
 
-    def send_file_to_feishu(self, srt_content: str, original_filename: str, chat_id: str = None):
-        """
-        将优化后的字幕文件发送到飞书（保留向后兼容）
 
-        参数：
-            srt_content: 优化后的 SRT 内容
-            original_filename: 原始文件名（用于生成输出文件名）
-            chat_id: 飞书聊天 ID（可选，如果为 None 则返回文件路径）
+# ======================
+# 命令行入口
+# ======================
 
-        返回：
-            (temp_file_path, output_filename) - 临时文件路径和输出文件名
-        """
-        # 生成输出文件名
-        name_part = original_filename.replace('.srt', '').replace('.SRT', '')
-        output_filename = f"{name_part}_优化后.srt"
+def main():
+    """命令行入口"""
+    if len(sys.argv) < 2:
+        print("Usage: python refine.py <srt_file> [--chat-id <chat_id>]", file=sys.stderr)
+        print("       python refine.py --stdin [--chat-id <chat_id>]", file=sys.stderr)
+        sys.exit(1)
 
-        # 保存到临时文件
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.srt', delete=False, encoding='utf-8') as f:
-            f.write(srt_content)
-            temp_file_path = f.name
+    skill = SubtitleRefinerSkill()
 
-        try:
-            # 如果没有提供 chat_id，返回文件路径让调用者处理
-            if chat_id is None:
-                return temp_file_path, output_filename
+    # 读取 SRT 内容
+    source_path = None
+    if sys.argv[1] == '--stdin':
+        srt_content = sys.stdin.read()
+        original_filename = "stdin.srt"
+    else:
+        srt_file = sys.argv[1]
+        source_path = srt_file
+        original_filename = os.path.basename(srt_file)
+        with open(srt_file, 'r', encoding='utf-8') as f:
+            srt_content = f.read()
 
-            # 构建 openclaw message send 命令
-            cmd = [
-                'openclaw', 'message', 'send',
-                '--channel', 'feishu',
-                '--target', chat_id,
-                '--message', f'✅ 文件已发送成功！\n优化后的字幕文件 {output_filename} 已发送给你。',
-                '--media', temp_file_path
-            ]
+    # 处理字幕
+    new_srt, summary = skill.run(srt_content, return_summary=True)
 
-            # 执行命令
-            result = subprocess.run(cmd, capture_output=True, text=True)
+    # 输出
+    if '--json' in sys.argv:
+        print(json.dumps({
+            "refined_srt": new_srt,
+            "summary": summary
+        }, ensure_ascii=False, indent=2))
+    else:
+        # 输出优化后的 SRT
+        print(new_srt)
 
-            if result.returncode == 0:
-                return temp_file_path, output_filename
-            else:
-                # 如果命令执行失败，返回文件路径让调用者处理
-                return temp_file_path, output_filename
+    # 如果指定了 chat_id，发送到飞书
+    chat_id = None
+    if '--chat-id' in sys.argv:
+        idx = sys.argv.index('--chat-id')
+        if idx + 1 < len(sys.argv):
+            chat_id = sys.argv[idx + 1]
 
-        except Exception as e:
-            # 如果出现异常，返回文件路径让调用者处理
-            return temp_file_path, output_filename
+    if chat_id:
+        # 获取 skill 目录
+        skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+        # 发送文件
+        output_filename = skill.send_optimized_file(new_srt, original_filename, chat_id, skill_dir, source_path)
+        print(f"\n✅ 已发送到飞书：{output_filename}", file=sys.stderr)
+
+        # 发送概要
+        skill.send_summary(summary, chat_id, output_filename)
+
+
+if __name__ == '__main__':
+    main()

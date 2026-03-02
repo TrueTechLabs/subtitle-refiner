@@ -2,6 +2,14 @@
 name: subtitle-refiner
 description: 字幕去口语化与术语标准化，保持时间戳不变。上传 SRT 字幕文件，自动删除口气词、纠正术语并返回优化后的文件及优化概要。
 user-invocable: true
+metadata:
+  {
+    "openclaw":
+      {
+        "emoji": "📝",
+        "requires": { "bins": ["python3"] }
+      }
+  }
 ---
 
 # Subtitle Refiner
@@ -17,6 +25,20 @@ user-invocable: true
 - 自动返回优化后的文件
 - 生成优化概要报告
 
+## 文件存储
+
+优化后的文件保存在 skill 目录下：
+
+- **原始字幕：** `{baseDir}/subtitle/` - 上传的原始 SRT 文件
+- **优化字幕：** `{baseDir}/subtitle_refine/` - 优化后的 SRT 文件
+
+## 文件命名格式
+
+- **原始文件：** 保持原名（自动去除 UUID 后缀）
+- **优化文件：** `源文件名_优化+时间戳.srt`
+  - 示例：`chatgpt订阅会员字幕3.srt` → `chatgpt订阅会员字幕3_优化202603022159.srt`
+  - 时间戳格式：`YYYYMMDDHHmm`
+
 ## 使用方法
 
 ### 方式 1：直接上传 SRT 文件
@@ -27,38 +49,10 @@ user-invocable: true
 /subtitle-refiner <srt文件路径>
 ```
 
-### 处理流程
-1. **解析并优化**：删除口语词和多余表达
-2. **应用术语字典替换**：标准化技术术语
-3. **保持时间戳不变**
-4. **发送优化后的文件**：将文件保存到 media/inbound 目录并发送
-5. **发送优化概要**：包含统计信息和详细变化
-
-### 新增方法
-
-#### `process_and_send(srt_content, original_filename, chat_id)`
-完整的一站式处理流程，自动完成所有步骤：
-- 优化字幕内容
-- 发送优化后的文件（附件形式）
-- 发送详细的优化概要
-
-#### `send_optimized_file(srt_content, original_filename, chat_id)`
-将优化后的文件保存到 media/inbound 目录并作为附件发送。
-
-#### `send_summary(summary, chat_id, filename)`
-发送详细的优化统计和变化概要。
-
-### 发送方式
-优化后的文件会通过 OpenClaw 命令行工具直接发送：
+### 命令行使用
 ```bash
-openclaw message send \
-  --channel feishu \
-  --target <chat_id> \
-  --message "📄 优化后的字幕文件 <文件名>" \
-  --media <优化后的文件路径>
+python3 {baseDir}/scripts/refine.py <srt文件路径> [--chat-id <chat_id>]
 ```
-
-文件会被保存到 `/home/pi/.openclaw/media/inbound` 目录，确保飞书能正确识别为文件附件。
 
 ## 术语映射
 
@@ -68,12 +62,19 @@ openclaw message send \
 
 ## 输出内容
 
-- 优化后的 SRT 文件
+- 优化后的 SRT 文件（通过飞书发送）
 - 优化统计：
   - 总共优化多少条
   - 删除的口语词类型
   - **详细变化（前5条）**：显示前5处修改的对比
 
-## 文件位置
+## 实现说明
 
-{baseDir}/skill.py
+使用 Python 脚本处理 SRT 文件：
+- 解析 SRT 格式
+- 删除口语词和多余表达
+- 应用术语字典替换
+- 重新构建 SRT 文件
+- 原始文件保存到 `subtitle/` 目录
+- 优化文件保存到 `subtitle_refine/` 目录
+- 通过 OpenClaw 发送优化后的文件和概要
