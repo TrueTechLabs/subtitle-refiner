@@ -421,6 +421,145 @@ class SubtitleRefiner:
             print(f"⚠️  优化失败（行: {text[:30]}...）: {e}，保留原文", file=sys.stderr)
             return text, False
 
+    def refine_batch(
+        self,
+        parsed: List[Dict],
+        topic: str,
+        batch_size: int = 100
+    ) -> Tuple[List[Dict], List[Dict]]:
+        """
+        批量优化字幕（固定每 100 行一批）
+
+        Args:
+            parsed: 解析后的字幕数据
+            topic: 视频主题
+            batch_size: 每批处理多少行（默认 100）
+
+        Returns:
+            (优化后的数据, 修改列表)
+        """
+        changes = []
+        total = len(parsed)
+        total_batches = (total + batch_size - 1) // batch_size
+
+        for batch_idx in range(total_batches):
+            start = batch_idx * batch_size
+            end = min(start + batch_size, total)
+            batch = parsed[start:end]
+
+            print(f"🔄 正在处理批次 {batch_idx + 1}/{total_batches} (行 {start + 1}-{end})...", file=sys.stderr)
+
+            # 优化这一批
+            batch_changes = self._process_batch(batch, topic)
+            changes.extend(batch_changes)
+
+        return parsed, changes
+
+    def _process_batch(
+        self,
+        batch: List[Dict],
+        topic: str
+    ) -> List[Dict]:
+        """
+        处理一批字幕
+
+        Args:
+            batch: 一批字幕数据
+            topic: 视频主题
+
+        Returns:
+            这批的修改列表
+        """
+        import json
+
+        # 构建 JSON 数组
+        subtitles_json = json.dumps([
+            {"index": block["index"], "text": block["text"]}
+            for block in batch
+        ], ensure_ascii=False)
+
+        prompt = f"""你是专业字幕校对编辑。
+
+视频主题：{topic}
+
+任务：只修正以下问题，不要做其他改动：
+1. 删除口语语气词（嗯、啊、那个、就是、然后、呃等）
+2. 修正语音识别错误（如：XGBT→ChatGPT，RG→RAG，菜GPT→ChatGPT等）
+3. 保持原句意思完全不变
+4. 不扩写、不缩写
+5. 不改变语气
+
+字幕列表（JSON 格式）：
+{subtitles_json}
+
+请返回优化后的 JSON 数组，保持 index 和数量完全不变，不要添加任何其他内容："""
+
+        try:
+            refined_text, input_tokens, output_tokens = call_llm_with_fallback(
+                prompt,
+                temperature=0.2
+            )
+            self.total_input_tokens += input_tokens
+            self.total_output_tokens += output_tokens
+
+            # 解析 JSON 结果
+            refined_array = json.loads(refined_text.strip())
+
+            # 验证数量一致
+            if len(refined_array) != len(batch):
+                raise ValueError(f"返回数量不匹配：期望 {len(batch)}，得到 {len(refined_array)}")
+
+            # 更新字幕并记录修改
+            changes = []
+            refined_map = {item["index"]: item["text"] for item in refined_array}
+
+            for block in batch:
+                original = block["text"]
+                refined = refined_map.get(block["index"], original)
+                block["text"] = refined
+
+                if refined != original:
+                    changes.append({
+                        "index": block["index"],
+                        "time": block["time"],
+                        "original": original,
+                        "refined": refined
+                    })
+
+            return changes
+
+        except (json.JSONDecodeError, KeyError, ValueError) as e:
+            print(f"⚠️  批量处理失败: {e}，回退到逐行处理", file=sys.stderr)
+            # 回退到逐行处理这一批
+            return self._process_batch_line_by_line(batch, topic)
+
+    def _process_batch_line_by_line(
+        self,
+        batch: List[Dict],
+        topic: str
+    ) -> List[Dict]:
+        """逐行处理一批字幕（回退方案）"""
+        changes = []
+
+        for idx, block in enumerate(batch, 1):
+            print(f"  🔄 逐行处理 {idx}/{len(batch)}...", file=sys.stderr, end='\r')
+
+            original = block["text"]
+            refined, was_modified = self.refine_subtitle_line(original, topic)
+
+            block["text"] = refined
+
+            if was_modified:
+                changes.append({
+                    "index": block["index"],
+                    "time": block["time"],
+                    "original": original,
+                    "refined": refined
+                })
+
+        print()  # 换行
+        return changes
+
     def refine(
         self,
         parsed: List[Dict]
@@ -441,25 +580,11 @@ class SubtitleRefiner:
         topic = self.detect_topic(texts)
         print(f"✓ 检测到主题: {topic}", file=sys.stderr)
 
-        # 步骤 2: 逐行优化
-        changes = []
+        # 步骤 2: 批量优化字幕（固定每 100 行一批）
         total = len(parsed)
+        print(f"🎯 正在批量优化 {total} 条字幕（每批 100 行）...", file=sys.stderr)
 
-        for idx, block in enumerate(parsed, 1):
-            print(f"🔄 正在处理 {idx}/{total}...", file=sys.stderr, end='\r')
-
-            original = block["text"]
-            refined, was_modified = self.refine_subtitle_line(original, topic)
-
-            block["text"] = refined
-
-            if was_modified:
-                changes.append({
-                    "index": block["index"],
-                    "time": block["time"],
-                    "original": original,
-                    "refined": refined
-                })
+        parsed, changes = self.refine_batch(parsed, topic, batch_size=100)
 
         print(f"\n✓ 已处理 {total} 条字幕", file=sys.stderr)
         print(f"✓ 修改了 {len(changes)} 处", file=sys.stderr)
