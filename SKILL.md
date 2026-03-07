@@ -1,6 +1,6 @@
 ---
 name: subtitle-refiner
-description: Optimize SRT subtitle files by removing filler words and standardizing terminology while preserving timestamps exactly. When a user uploads an SRT file, process it and send the optimized file back via Feishu.
+description: Process SRT subtitle files. Removes filler words, normalizes terminology, preserves timestamps, and sends the optimized subtitle file back to the user via Feishu.
 user-invocable: true
 metadata:
   {
@@ -14,108 +14,111 @@ metadata:
 
 # Subtitle Refiner
 
-字幕优化技能，用于：
+Optimize SRT subtitles by:
 
-- 删除口语词
-- 标准化术语
-- 保持 SRT 时间戳完全不变
-- 返回优化后的字幕文件
+- removing filler words
+- standardizing terminology
+- preserving timestamps exactly
+- returning an optimized subtitle file
 
 ---
 
-# When to use
+# When to Use
 
-当用户：
+Use this skill when:
 
-- 上传 `.srt` 文件
-- 说 “优化字幕”
-- 说 “去掉口语词”
-- 说 “校对字幕”
+- the user uploads an `.srt` file
+- the user asks to optimize subtitles
+- the user asks to remove filler words
+- the user asks to clean subtitle text
 
-必须调用此技能。
+Examples:
+
+- 优化这个字幕
+- 去掉字幕里的口语词
+- 校对字幕
+- clean this subtitle file
 
 ---
 
 # Workflow
 
-1. 获取用户提供的 `.srt` 文件路径
-2. 运行脚本处理字幕
+When this skill is triggered:
+
+1. Obtain the SRT file path provided by the user
+2. Run the subtitle refinement script
 
 ```
-python3 {baseDir}/scripts/refine.py <srt文件路径> --chat-id <chat_id>
+python3 {baseDir}/scripts/refine.py <srt_file_path> --chat-id <chat_id>
 ```
 
-脚本会：
+The script will:
 
-- 解析字幕
-- 删除口语词
-- 标准化术语
-- 生成优化字幕
-- 返回文件路径
+- parse the SRT file
+- remove filler words
+- normalize terminology
+- preserve timestamps
+- generate the optimized subtitle file
+- send the file to the user through Feishu
 
 ---
 
-# IMPORTANT: Send file back to user
+# Important
 
-优化完成后 **必须发送文件**，不要只发送文本。
+The Python script is responsible for:
 
-使用 OpenClaw CLI：
+- generating the optimized subtitle file
+- sending the file via Feishu
+- sending the summary message
 
-```
-openclaw message send \
-  --channel feishu \
-  --target <chat_id> \
-  --message "📄 优化后的字幕文件 <文件名>" \
-  --media <优化后的文件路径>
-```
+The agent must **only run the script**.
 
-必须发送文件。
-
-禁止只返回文字。
+Do not attempt to manually send the file.
 
 ---
 
 # Rules
 
-执行时必须遵守：
+Strict rules:
 
-1. 不允许修改时间戳
-2. 不允许删除字幕编号
-3. 不允许改变字幕顺序
-4. 仅允许修改字幕文本
-5. 必须返回优化后的字幕文件
+1. Never modify timestamps
+2. Never change subtitle order
+3. Never remove subtitle indices
+4. Only modify subtitle text
+5. Always execute the Python script
 
 ---
 
 # Output
 
-执行后：
+The script will send:
 
-1. 发送优化后的 `.srt` 文件
-2. 再发送优化统计：
+1️⃣ Optimized subtitle file (.srt)
 
-示例：
+2️⃣ Optimization summary message
+
+Example summary:
 
 ```
 📊 字幕优化概要
 
 总字幕条数：120
-优化条数：35
-删除口语词：28
-术语修正：12
+优化条数：32
+删除口语词：25
+术语修正：10
 ```
 
 ---
 
 # File Storage
 
-原始字幕：
+Original subtitles:
 
 ```
 {openclaw/workspace}/subtitle/
 ```
 
-优化字幕：
+Optimized subtitles:
 
 ```
 {openclaw/workspace}/subtitle_refine/
@@ -125,13 +128,13 @@ openclaw message send \
 
 # File Naming
 
-输出文件：
+Optimized file format:
 
 ```
-源文件名_优化YYYYMMDDHHmm.srt
+<original_name>_优化YYYYMMDDHHmm.srt
 ```
 
-示例：
+Example:
 
 ```
 demo.srt
