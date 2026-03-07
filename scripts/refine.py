@@ -783,8 +783,8 @@ def refine_and_send(
 
         # 生成输出文件名
         base_name = os.path.basename(srt_file_path).replace(".srt", "")
-        timestamp = datetime.now().strftime("%Y%m%d%H%M")
-        filename = f"{base_name}_优化{timestamp}.srt"
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M")
+        filename = f"{base_name}_优化_{timestamp}.srt"
 
         # 创建输出目录
         output_dir = os.path.join(workspace_dir, "subtitle_refine")

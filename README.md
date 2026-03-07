@@ -15,8 +15,8 @@
   - 更多上下文相关的错误修正...
 - **⏱️ 时间轴保护**：所有时间戳信息完全不变
 - **🧠 主题感知**：分析视频主题，进行上下文相关的智能校对
-- **📊 Token 追踪**：详细记录每次优化的 AI 消耗
-- **📤 自动发送**：通过 Feishu 自动发送优化结果
+- **📊 Token 追踪**：详细记录每次优化的 AI 消耗Token
+- **📤 自动发送**：通过飞书自动发送优化后的字幕
 
 ## 📋 优化效果示例
 
@@ -61,14 +61,14 @@
 ```
 
 ## 🚀 安装
-## API_KEY 获取
+## 大模型 API_KEY 获取（必须！）
 注册领取API 16元代金券 https://cloud.siliconflow.cn/i/AEg95IPc
 
 获取SILICONFLOW_API_KEY：https://cloud.siliconflow.cn/me/account/ak
 
 ### 在小龙虾聊天窗口发送：
 ```bash
-安装技能：https://github.com/TrueTechLabs/subtitle_refiner 
+安装技能：https://gitee.com/real__cool/subtitle_refiner 
 配置当前shell环境变量：SILICONFLOW_API_KEY=sk-m******
 执行export SILICONFLOW_API_KEY=sk-m****** 命令使当前环境获取API_KEY
 ```
@@ -114,33 +114,7 @@ Agent：收到字幕文件，开始优化...
 ✅ 完成！
 ```
 
-### 命令行调用
 
-你也可以直接通过命令行调用优化脚本：
-
-```bash
-python3 scripts/refine.py <srt_file> <chat_id> <workspace>
-```
-
-**参数说明**：
-- `<srt_file>`: SRT 文件路径
-- `<chat_id>`: Feishu 聊天 ID
-- `<workspace>`: OpenClaw workspace 目录
-
-**示例**：
-```bash
-# 基本用法
-python3 scripts/refine.py demo.srt oc_xxx /workspace
-
-# 使用绝对路径
-python3 /path/to/skill/scripts/refine.py /path/to/subtitle.srt oc_123 /workspace
-```
-
-**返回值**：
-- 成功：退出码 0
-- 失败：退出码 1
-
-详见 [CLI_USAGE.md](CLI_USAGE.md) 获取完整的命令行使用指南。
 
 ## ⚙️ 配置
 
