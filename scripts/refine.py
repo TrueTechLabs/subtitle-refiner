@@ -29,6 +29,93 @@ API_ENDPOINT = "https://api.siliconflow.cn/v1/chat/completions"
 PRIMARY_MODEL = "Pro/zai-org/GLM-4.7"
 FALLBACK_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 
+# 错误提示映射字典
+ERROR_SOLUTIONS = {
+    "401": {
+        "emoji": "🔑",
+        "title": "API Key 错误",
+        "solution": "请检查环境变量 SILICONFLOW_API_KEY 是否正确"
+    },
+    "402": {
+        "emoji": "💰",
+        "title": "余额不足",
+        "solution": "请充值：https://cloud.siliconflow.cn/me/account/ak"
+    },
+    "403": {
+        "emoji": "🚫",
+        "title": "权限不足",
+        "solution": "请检查账户状态和 API 权限"
+    },
+    "429": {
+        "emoji": "⏳",
+        "title": "请求过于频繁",
+        "solution": "请稍后重试"
+    },
+    "timeout": {
+        "emoji": "⏱️",
+        "title": "请求超时",
+        "solution": "请检查网络连接或稍后重试"
+    },
+    "connection": {
+        "emoji": "🔌",
+        "title": "网络连接失败",
+        "solution": "请检查网络设置和代理配置"
+    }
+}
+
+
+# =====================
+# 环境检测函数
+# =====================
+
+def check_network_connection() -> bool:
+    """
+    检测网络连接是否正常
+
+    Returns:
+        bool: 网络连接正常返回 True，否则返回 False
+    """
+    try:
+        import socket
+        socket.create_connection(("www.siliconflow.cn", 443), timeout=5)
+        return True
+    except OSError:
+        return False
+
+
+def check_api_key_validity() -> Tuple[bool, str]:
+    """
+    验证 API Key 是否有效
+
+    Returns:
+        (是否有效, 错误消息)
+    """
+    if not SILICONFLOW_API_KEY:
+        return False, "API Key 未设置"
+
+    try:
+        import requests
+        # 发送一个简单的测试请求
+        test_response = requests.get(
+            "https://api.siliconflow.cn/v1/models",
+            headers={"Authorization": f"Bearer {SILICONFLOW_API_KEY}"},
+            timeout=10
+        )
+
+        if test_response.status_code == 401:
+            return False, "API Key 无效或已过期"
+        elif test_response.status_code == 403:
+            return False, "API 权限不足或余额不足"
+        elif test_response.status_code == 200:
+            return True, "API Key 有效"
+        else:
+            return False, f"API 返回状态码 {test_response.status_code}"
+
+    except ImportError:
+        return False, "缺少 requests 库"
+    except Exception as e:
+        return False, f"网络连接失败: {str(e)}"
+
 
 # =====================
 # API 调用函数
@@ -81,13 +168,20 @@ def call_siliconflow_api(
 
     try:
         import requests
+
+        # 更细粒度的超时设置：(连接超时, 读取超时)
         response = requests.post(
             API_ENDPOINT,
             headers=headers,
             json=payload,
-            timeout=60
+            timeout=(10, 60)  # 连接超时 10 秒，读取超时 60 秒
         )
         response.raise_for_status()
+
+        # 检查余额警告（如果有）
+        balance_warning = response.headers.get('X-Balance-Warning')
+        if balance_warning:
+            print(f"💰 提示：{balance_warning}", file=sys.stderr)
 
         data = response.json()
 
@@ -101,8 +195,61 @@ def call_siliconflow_api(
 
     except ImportError:
         raise RuntimeError("缺少 requests 库，请安装：pip install requests")
+
+    except requests.exceptions.HTTPError as e:
+        # 详细的 HTTP 错误处理
+        status_code = e.response.status_code
+        error_detail = e.response.text if hasattr(e.response, 'text') else str(e)
+
+        if status_code == 401:
+            raise RuntimeError(
+                f"{ERROR_SOLUTIONS['401']['emoji']} API Key 错误或未设置。\n"
+                f"请检查环境变量 SILICONFLOW_API_KEY 是否正确。\n"
+                f"设置方法：export SILICONFLOW_API_KEY=your_key"
+            )
+        elif status_code == 402:
+            raise RuntimeError(
+                f"{ERROR_SOLUTIONS['402']['emoji']} API 余额不足。\n"
+                f"服务器返回：{error_detail}\n"
+                f"{ERROR_SOLUTIONS['402']['solution']}"
+            )
+        elif status_code == 403:
+            raise RuntimeError(
+                f"{ERROR_SOLUTIONS['403']['emoji']} API 权限问题。\n"
+                f"服务器返回：{error_detail}\n"
+                f"{ERROR_SOLUTIONS['403']['solution']}"
+            )
+        elif status_code == 429:
+            retry_after = e.response.headers.get('Retry-After', '60')
+            raise RuntimeError(
+                f"{ERROR_SOLUTIONS['429']['emoji']} 请求过于频繁，请在 {retry_after} 秒后重试"
+            )
+        elif status_code >= 500:
+            raise RuntimeError(
+                f"⚠️  SiliconFlow 服务器错误（{status_code}）\n"
+                f"请稍后重试或查看服务状态"
+            )
+        else:
+            raise RuntimeError(
+                f"❌ API 调用失败（HTTP {status_code}）\n"
+                f"详情：{error_detail}"
+            )
+
+    except requests.exceptions.Timeout as e:
+        raise RuntimeError(
+            f"{ERROR_SOLUTIONS['timeout']['emoji']} API 请求超时。\n"
+            f"{ERROR_SOLUTIONS['timeout']['solution']}"
+        )
+
+    except requests.exceptions.ConnectionError as e:
+        raise RuntimeError(
+            f"{ERROR_SOLUTIONS['connection']['emoji']} 无法连接到 SiliconFlow API。\n"
+            f"{ERROR_SOLUTIONS['connection']['solution']}"
+        )
+
     except requests.exceptions.RequestException as e:
         raise RuntimeError(f"API 调用失败: {str(e)}")
+
     except (KeyError, IndexError) as e:
         raise RuntimeError(f"API 响应格式错误: {str(e)}")
 
@@ -456,6 +603,34 @@ def refine_and_send(
     }
 
     try:
+        # =====================
+        # 预检查环境
+        # =====================
+        print("🔍 正在检查环境...", file=sys.stderr)
+
+        # 1. 检查网络连接
+        if not check_network_connection():
+            error_msg = (
+                f"{ERROR_SOLUTIONS['connection']['emoji']} "
+                f"无法连接到 SiliconFlow，{ERROR_SOLUTIONS['connection']['solution']}"
+            )
+            result["error"] = error_msg
+            print(f"❌ {error_msg}", file=sys.stderr)
+            return result
+
+        # 2. 验证 API Key
+        key_valid, key_msg = check_api_key_validity()
+        if not key_valid:
+            error_msg = (
+                f"❌ API Key 检查失败：{key_msg}\n"
+                f"请设置：export SILICONFLOW_API_KEY=your_key"
+            )
+            result["error"] = error_msg
+            print(f"❌ {error_msg}", file=sys.stderr)
+            return result
+
+        print("✓ 环境检查通过", file=sys.stderr)
+
         # 验证输入文件
         if not os.path.exists(srt_file_path):
             raise FileNotFoundError(f"文件不存在: {srt_file_path}")
@@ -529,9 +704,10 @@ def refine_and_send(
 # =====================
 
 if __name__ == "__main__":
-    # 当直接运行此脚本时的简单测试
+    # 命令行入口：直接运行此脚本
     if len(sys.argv) < 4:
-        print("用法: python -m refine <srt_file> <chat_id> <workspace_dir>", file=sys.stderr)
+        print("用法: python3 refine.py <srt_file> <chat_id> <workspace_dir>", file=sys.stderr)
+        print("示例: python3 refine.py demo.srt oc_xxx /workspace", file=sys.stderr)
         sys.exit(1)
 
     srt_file = sys.argv[1]

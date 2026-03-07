@@ -61,22 +61,27 @@
 ```
 
 ## 🚀 安装
-
-> 在小龙虾聊天窗口发送：
-```bash
-安装技能：https://github.com/TrueTechLabs/subtitle_refiner 
-配置当前shell环境变量：SILICONFLOW_API_KEY=sk-m******
-```
-注册领域16代金券 https://cloud.siliconflow.cn/i/AEg95IPc
+## API_KEY 获取
+注册领取API 16元代金券 https://cloud.siliconflow.cn/i/AEg95IPc
 
 获取SILICONFLOW_API_KEY：https://cloud.siliconflow.cn/me/account/ak
 
-手动操作
+### 在小龙虾聊天窗口发送：
+```bash
+安装技能：https://github.com/TrueTechLabs/subtitle_refiner 
+配置当前shell环境变量：SILICONFLOW_API_KEY=sk-m******
+执行export SILICONFLOW_API_KEY=sk-m****** 命令使当前环境获取API_KEY
+```
+
+
+
+### 或手动操作
 ```bash
 # 也可手动下载项目复制到 OpenClaw skills 目录
 cp -r subtitle_refiner ~/.openclaw/skills/subtitle-refiner
-# 配置环境变量到.bashrc/.zshrc
+# 配置环境变量到 .bashrc .zshrc
 export SILICONFLOW_API_KEY=sk-m******
+source .bashrc
 ```
 
 
@@ -108,6 +113,34 @@ Agent：收到字幕文件，开始优化...
 📤 正在通过 Feishu 发送...
 ✅ 完成！
 ```
+
+### 命令行调用
+
+你也可以直接通过命令行调用优化脚本：
+
+```bash
+python3 scripts/refine.py <srt_file> <chat_id> <workspace>
+```
+
+**参数说明**：
+- `<srt_file>`: SRT 文件路径
+- `<chat_id>`: Feishu 聊天 ID
+- `<workspace>`: OpenClaw workspace 目录
+
+**示例**：
+```bash
+# 基本用法
+python3 scripts/refine.py demo.srt oc_xxx /workspace
+
+# 使用绝对路径
+python3 /path/to/skill/scripts/refine.py /path/to/subtitle.srt oc_123 /workspace
+```
+
+**返回值**：
+- 成功：退出码 0
+- 失败：退出码 1
+
+详见 [CLI_USAGE.md](CLI_USAGE.md) 获取完整的命令行使用指南。
 
 ## ⚙️ 配置
 
@@ -175,20 +208,105 @@ FALLBACK_MODEL = "Qwen/Qwen2.5-7B-Instruct"  # 备用模型
 ### 质量保证
 
 - **Temperature 0.2**：确保输出稳定性
-- **规则约束**：6 条明确规则，避免过度修改
+- **规则约束**：5-6 条明确规则，避免过度修改
 - **错误处理**：主模型失败时自动切换备用模型
 
 ## 🛠️ 故障排除
 
 ### 问题：API 调用失败
 
-**错误信息**：`API 调用失败: ...`
+#### 🔑 API Key 错误 (401)
+
+**错误信息**：
+```
+❌ API Key 错误或未设置。
+请检查环境变量 SILICONFLOW_API_KEY 是否正确。
+```
 
 **解决方案**：
-1. 检查 API Key 是否正确设置
-2. 确认网络连接正常
-3. 检查 SiliconFlow 服务状态
-4. 查看是否有足够的 API 额度
+```bash
+# 检查是否已设置
+echo $SILICONFLOW_API_KEY
+
+# 设置 API Key
+export SILICONFLOW_API_KEY=your_key_here
+
+# 验证
+python3 test_error_handling.py
+```
+
+#### 💰 余额不足 (402/403)
+
+**错误信息**：
+```
+❌ API 余额不足或权限问题。
+请充值：https://cloud.siliconflow.cn/me/account/ak
+```
+
+**解决方案**：
+1. 登录 [SiliconFlow 控制台](https://cloud.siliconflow.cn/me/account/ak)
+2. 检查账户余额
+3. 充值或获取免费额度
+
+#### ⏱️ 请求超时
+
+**错误信息**：
+```
+⏱️ API 请求超时。
+请检查网络连接或稍后重试
+```
+
+**解决方案**：
+1. 检查网络连接
+2. 尝试使用代理
+3. 稍后重试
+
+#### 🔌 网络连接失败
+
+**错误信息**：
+```
+🔌 无法连接到 SiliconFlow API。
+请检查网络连接和代理设置
+```
+
+**解决方案**：
+1. 检查网络连接
+2. 检查防火墙设置
+3. 配置代理（如果需要）
+
+#### ⏳ 请求过于频繁 (429)
+
+**错误信息**：
+```
+⚠️ 请求过于频繁，请在 60 秒后重试
+```
+
+**解决方案**：
+- 等待指定时间后重试
+- 减少并发请求数
+
+### 测试错误处理
+
+运行测试脚本验证配置：
+
+```bash
+python3 test_error_handling.py
+```
+
+输出示例：
+```
+🧪 错误处理功能测试
+
+测试 1：网络连接检测
+✅ 网络连接正常
+
+测试 2：API Key 验证
+✅ API Key 有效
+
+测试 3：错误提示字典
+🔑 401: API Key 错误
+...
+```
 
 
 
@@ -200,7 +318,3 @@ FALLBACK_MODEL = "Qwen/Qwen2.5-7B-Instruct"  # 备用模型
 ## 📄 许可证
 
 MIT License
-
-
-
-**Made with ❤️ by Subtitle Refiner Team**

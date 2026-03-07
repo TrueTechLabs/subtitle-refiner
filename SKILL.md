@@ -59,25 +59,24 @@ AI 驱动的字幕优化工具，使用 SiliconFlow GLM-4.7 模型智能优化 S
 
 ### 步骤 2：调用优化模块
 
-使用以下 Python 代码调用优化模块：
+直接执行优化脚本：
 
-```python
-import sys
-sys.path.insert(0, "{baseDir}/scripts")
-from refine import refine_and_send
-
-# 调用优化函数
-refine_and_send(
-    srt_file_path="<SRT 文件路径>",
-    chat_id="<Feishu chat ID>",
-    workspace_dir="<OpenClaw workspace 目录>"
-)
+```bash
+python3 {baseDir}/scripts/refine.py <srt_file> <chat_id> <workspace>
 ```
 
 **参数说明**：
-- `srt_file_path`: SRT 文件的完整路径
-- `chat_id`: Feishu 聊天 ID（从上下文获取）
-- `workspace_dir`: OpenClaw workspace 目录（用于存储输出文件）
+- `<srt_file>`: SRT 文件的完整路径
+- `<chat_id>`: Feishu 聊天 ID（从上下文获取）
+- `<workspace>`: OpenClaw workspace 目录（用于存储输出文件）
+
+**示例**：
+```bash
+python3 /path/to/skill/scripts/refine.py \
+    /workspace/subtitle/demo.srt \
+    "oc_xxxxxxxxx" \
+    /workspace
+```
 
 ### 步骤 3：发送结果
 
@@ -114,7 +113,7 @@ Agent **必须**遵守以下规则：
 发送到 Feishu 的消息格式：
 
 ```
-📊 字幕优化完成
+🎉 字幕优化完成
 
 本次消耗token：输入1234 输出567，共修改了15处，以下为前3处：
 
@@ -151,18 +150,38 @@ Agent **必须**遵守以下规则：
 
 ## 错误处理
 
-如果遇到以下错误：
+Skill 具有完善的错误检测和处理机制，会在处理前自动检查环境：
 
-1. **API Key 缺失**
-   - 提示用户设置环境变量：`export SILICONFLOW_API_KEY=your_key`
+### 预检查功能
 
-2. **API 调用失败**
-   - 脚本会自动尝试备用模型
-   - 如果都失败，返回原始文件
+1. **🔌 网络连接检测**：自动检测是否能连接到 SiliconFlow API
+2. **🔑 API Key 验证**：验证 API Key 是否有效
+3. **⚠️ 早期失败**：在开始处理前发现问题，避免浪费 token
 
-3. **文件格式错误**
-   - 检查是否为有效的 SRT 格式
-   - 确保文件编码为 UTF-8
+### 错误提示
+
+| 错误类型 | 提示 | 解决方案 |
+|---------|------|----------|
+| 🔑 API Key 错误 (401) | API Key 未设置或无效 | 检查环境变量 `SILICONFLOW_API_KEY` |
+| 💰 余额不足 (402) | API 余额不足 | [充值](https://cloud.siliconflow.cn/me/account/ak) |
+| 🚫 权限不足 (403) | API 权限问题 | 检查账户状态和 API 权限 |
+| ⏳ 请求频繁 (429) | 请求过于频繁 | 稍后重试 |
+| ⏱️ 请求超时 | API 请求超时 | 检查网络连接或稍后重试 |
+| 🔌 网络失败 | 无法连接到 API | 检查网络设置和代理配置 |
+
+### 自动重试
+
+- **模型切换**：主模型失败时自动尝试备用模型
+- **超时重试**：支持连接超时（10秒）和读取超时（60秒）分离
+- **优雅降级**：逐行优化失败时保留原文继续处理
+
+### 测试错误处理
+
+运行测试脚本验证：
+
+```bash
+python3 test_error_handling.py
+```
 
 ---
 
