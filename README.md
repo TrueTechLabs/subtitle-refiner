@@ -145,8 +145,8 @@ RAG 技术可以提高 LLM 的准确性。
 
 ## 文件存储
 
-- **原始字幕**：保存于 `subtitle/` 目录
-- **优化字幕**：保存于 `subtitle_refine/` 目录，命名格式为 `源文件名_优化+时间戳.srt`
+- **原始字幕**：保存于 `openclaw/workspace/subtitle/` 目录
+- **优化字幕**：保存于 `openclaw/workspace/subtitle_refine/` 目录，命名格式为 `源文件名_优化+时间戳.srt`
 
 ---
 
