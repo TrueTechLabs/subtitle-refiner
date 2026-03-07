@@ -1,30 +1,22 @@
 #!/usr/bin/env python3
-"""
-Subtitle Refiner
-OpenClaw Production Version
-"""
 
-import re
 import os
+import re
 import sys
-import subprocess
+import requests
 from datetime import datetime
 
 sys.stdout.reconfigure(encoding="utf-8")
 
-class SubtitleRefinerSkill:
+MODEL_ENDPOINT = "http://localhost:8000/v1/chat/completions"
+MODEL_NAME = "openclaw"
 
-    FILLER_WORDS = ["嗯", "啊", "那个", "就是", "然后", "呃"]
 
-    TERMINOLOGY_DICT = {
-        "大模型": "大型语言模型",
-        "rag": "RAG",
-        "llm": "LLM"
-    }
+class SubtitleRefiner:
 
-    # ======================
+    # =====================
     # SRT 解析
-    # ======================
+    # =====================
 
     def parse_srt(self, content):
 
@@ -60,176 +52,182 @@ class SubtitleRefinerSkill:
         return "\n\n".join(result)
 
 
-    # ======================
-    # 文本处理
-    # ======================
+    # =====================
+    # LLM调用
+    # =====================
 
-    def refine_text(self, text):
+    def call_llm(self, text, topic):
 
-        original = text
-        cleaned = text
+        prompt = f"""
+你是专业字幕校对编辑。
 
-        # 删除句首口语词
-        cleaned = re.sub(
-            r'^(嗯|啊|呃|那个|就是|然后)[，。、\s]*',
-            '',
-            cleaned
-        )
+视频主题：
+{topic}
 
-        # 删除重复空格
-        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+任务：
+只修正以下问题：
 
-        # 如果删空了恢复原文
-        if not cleaned:
-            cleaned = original
+1 删除口气词（嗯、啊、那个、就是等）
+2 修正语音识别错误
+3 保持原句意思
+4 不扩写
+5 不改变语气
+6 保持句子长度接近
 
-        return cleaned
+只返回优化后的字幕。
+
+字幕：
+{text}
+"""
+
+        payload = {
+            "model": MODEL_NAME,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.2
+        }
+
+        resp = requests.post(MODEL_ENDPOINT, json=payload)
+
+        data = resp.json()
+
+        return data["choices"][0]["message"]["content"].strip()
 
 
-    # ======================
-    # 主处理逻辑
-    # ======================
+    # =====================
+    # 主题识别
+    # =====================
 
-    def run(self, srt_content):
+    def detect_topic(self, texts):
 
-        parsed = self.parse_srt(srt_content)
+        combined = "\n".join(texts[:20])
+
+        prompt = f"""
+请总结以下字幕的主题。
+
+只返回一句话。
+
+字幕：
+{combined}
+"""
+
+        payload = {
+            "model": MODEL_NAME,
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0
+        }
+
+        resp = requests.post(MODEL_ENDPOINT, json=payload)
+
+        return resp.json()["choices"][0]["message"]["content"].strip()
+
+
+    # =====================
+    # 优化字幕
+    # =====================
+
+    def refine(self, parsed):
+
+        texts = [b["text"] for b in parsed]
+
+        topic = self.detect_topic(texts)
+
+        print("Detected topic:", topic)
 
         changes = []
 
-        filler_stats = {word: 0 for word in self.FILLER_WORDS}
-        term_stats = {k: 0 for k in self.TERMINOLOGY_DICT.keys()}
-
         for block in parsed:
 
-            original_text = block["text"]
+            original = block["text"]
 
-            cleaned = self.refine_text(original_text)
+            try:
 
-            # 统计口语词
-            for word in self.FILLER_WORDS:
+                refined = self.call_llm(original, topic)
 
-                count = original_text.count(word)
+            except Exception as e:
 
-                if count > 0:
-                    filler_stats[word] += count
+                refined = original
 
-            # 术语替换
-            for k, v in self.TERMINOLOGY_DICT.items():
+            block["text"] = refined
 
-                pattern = rf'\b{k}\b'
-
-                matches = re.findall(pattern, cleaned, flags=re.I)
-
-                if matches:
-                    term_stats[k] += len(matches)
-
-                cleaned = re.sub(pattern, v, cleaned, flags=re.I)
-
-            block["text"] = cleaned
-
-            if cleaned != original_text:
+            if refined != original:
 
                 changes.append({
                     "index": block["index"],
                     "time": block["time"],
-                    "original": original_text,
-                    "refined": cleaned
+                    "original": original,
+                    "refined": refined
                 })
 
-        new_srt = self.rebuild_srt(parsed)
-
-        summary = self.generate_summary(parsed, changes, filler_stats, term_stats)
-
-        return new_srt, summary
+        return parsed, topic, changes
 
 
-    # ======================
-    # 生成概要
-    # ======================
+    # =====================
+    # Summary
+    # =====================
 
-    def generate_summary(self, all_blocks, changes, filler_stats, term_stats):
-
-        total_blocks = len(all_blocks)
-
-        changed_blocks = len(changes)
-
-        total_fillers = sum(filler_stats.values())
-
-        total_terms = sum(term_stats.values())
+    def generate_summary(self, changes):
 
         summary = f"""
-📊 字幕优化概要
-{'='*30}
+📊 字幕优化完成
 
-总字幕条数：{total_blocks}
-优化条数：{changed_blocks}
+修改条数：{len(changes)}
 
-删除口语词：{total_fillers}
-术语修正：{total_terms}
-
-修改示例：
+示例修改：
 """
 
-        for change in changes[:3]:
+        for c in changes[:3]:
 
             summary += f"""
-
-[{change['index']}] {change['time']}
-原文：{change['original']}
-优化：{change['refined']}
+[{c['index']}]
+原：{c['original']}
+新：{c['refined']}
 """
-
-        if len(changes) > 3:
-            summary += f"\n... 还有 {len(changes)-3} 处修改"
 
         return summary
 
 
-    # ======================
-    # 发送飞书
-    # ======================
+# =====================
+# Feishu发送
+# =====================
 
-    def send_file(self, file_path, filename, chat_id):
+def send_file(path, filename, chat_id):
 
-        cmd = [
-            "openclaw",
-            "message",
-            "send",
-            "--channel", "feishu",
-            "--target", chat_id,
-            "--message", f"📄 优化后的字幕文件 {filename}",
-            "--media", file_path
-        ]
+    cmd = f"""
+openclaw message send \
+--channel feishu \
+--target {chat_id} \
+--message "📄 优化后的字幕文件 {filename}" \
+--media {path}
+"""
 
-        subprocess.run(cmd, check=True)
+    os.system(cmd)
 
 
-    def send_summary(self, summary, chat_id):
+def send_summary(summary, chat_id):
 
-        cmd = [
-            "openclaw",
-            "message",
-            "send",
-            "--channel", "feishu",
-            "--target", chat_id,
-            "--message", summary
-        ]
+    cmd = f"""
+openclaw message send \
+--channel feishu \
+--target {chat_id} \
+--message "{summary}"
+"""
 
-        subprocess.run(cmd, check=True)
+    os.system(cmd)
 
 
-# ======================
-# CLI
-# ======================
+# =====================
+# CLI入口
+# =====================
 
 def main():
 
     if len(sys.argv) < 2:
-
-        print("Usage: refine.py <srt_file> --chat-id <chat_id>", file=sys.stderr)
-        sys.exit(1)
-
-    skill = SubtitleRefinerSkill()
+        print("Usage: refine.py <srt_file> --chat-id xxx")
+        return
 
     srt_file = sys.argv[1]
 
@@ -240,37 +238,44 @@ def main():
         idx = sys.argv.index("--chat-id")
 
         if idx + 1 < len(sys.argv):
+
             chat_id = sys.argv[idx + 1]
 
     with open(srt_file, "r", encoding="utf-8-sig") as f:
-        srt_content = f.read()
 
-    new_srt, summary = skill.run(srt_content)
+        content = f.read()
+
+    refiner = SubtitleRefiner()
+
+    parsed = refiner.parse_srt(content)
+
+    parsed, topic, changes = refiner.refine(parsed)
+
+    new_srt = refiner.rebuild_srt(parsed)
 
     base = os.path.basename(srt_file).replace(".srt", "")
 
     timestamp = datetime.now().strftime("%Y%m%d%H%M")
 
-    output_filename = f"{base}_优化{timestamp}.srt"
+    filename = f"{base}_优化{timestamp}.srt"
 
-    skill_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-    out_dir = os.path.join(skill_dir, "subtitle_refine")
+    out_dir = "subtitle_refine"
 
     os.makedirs(out_dir, exist_ok=True)
 
-    output_path = os.path.join(out_dir, output_filename)
+    output_path = os.path.join(out_dir, filename)
 
     with open(output_path, "w", encoding="utf-8") as f:
+
         f.write(new_srt)
 
-    print(f"Optimized subtitle saved: {output_path}", file=sys.stderr)
+    summary = refiner.generate_summary(changes)
 
     if chat_id:
 
-        skill.send_file(output_path, output_filename, chat_id)
+        send_file(output_path, filename, chat_id)
 
-        skill.send_summary(summary, chat_id)
+        send_summary(summary, chat_id)
 
     else:
 
