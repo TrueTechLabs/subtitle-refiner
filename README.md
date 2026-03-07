@@ -69,7 +69,7 @@
 ### 在小龙虾聊天窗口发送：
 ```bash
 安装技能：https://gitee.com/real__cool/subtitle_refiner 
-配置当前shell环境变量：SILICONFLOW_API_KEY=sk-m******
+配置当前shell的环境变量：SILICONFLOW_API_KEY=sk-m******
 执行export SILICONFLOW_API_KEY=sk-m****** 命令使当前环境获取API_KEY
 ```
 
