@@ -755,8 +755,9 @@ class SubtitleRefiner:
         chunk_contents = []
         for chunk_idx, chunk in enumerate(chunks):
             chunk_text = f"DATA{chunk_idx}:\n"
-            for block in chunk:
-                chunk_text += f'{block["index"]} {block["text"]}\n'
+            for idx, block in enumerate(chunk):
+                # 只发送文本，不包含序号（序号会导致LLM在返回时重复序号）
+                chunk_text += f'{block["text"]}\n'
             chunk_contents.append(chunk_text)
 
         prompt_content = "\n".join(chunk_contents)
