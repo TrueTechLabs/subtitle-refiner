@@ -1237,7 +1237,7 @@ def refine_and_send(
 
         print("📤 正在通过 Feishu 发送...", file=sys.stderr)
         send_file_via_openclaw(output_path, chat_id)
-        send_message_via_openclaw(summary, chat_id)
+        # send_message_via_openclaw(summary, chat_id)
 
         # 返回结果
         result.update({

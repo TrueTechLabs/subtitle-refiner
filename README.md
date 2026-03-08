@@ -18,6 +18,28 @@
 - **📊 Token 追踪**：详细记录每次优化的 AI 消耗Token
 - **📤 自动发送**：通过飞书自动发送优化后的字幕
 
+## 🚀 安装
+## 大模型 API_KEY 获取（必须！）
+注册领取API 16元代金券 https://cloud.siliconflow.cn/i/AEg95IPc
+
+获取SILICONFLOW_API_KEY：https://cloud.siliconflow.cn/me/account/ak
+
+### 在小龙虾聊天窗口发送：
+```bash
+安装技能：https://gitee.com/real__cool/subtitle_refiner 
+配置当前shell的环境变量：SILICONFLOW_API_KEY=sk-m******
+执行export SILICONFLOW_API_KEY=sk-m****** 命令使当前环境获取API_KEY
+```
+
+### 或手动操作
+```bash
+# 也可手动下载项目复制到 OpenClaw skills 目录
+cp -r subtitle_refiner ~/.openclaw/skills/subtitle-refiner
+# 配置环境变量到 .bashrc .zshrc
+export SILICONFLOW_API_KEY=sk-m******
+source .bashrc
+```
+
 ## 📋 优化效果示例
 
 ### 优化前
@@ -44,45 +66,7 @@
 然后，我们可以用RAG技术
 ```
 
-### 优化总结
 
-```
-📊 字幕优化完成
-
-本次消耗token：输入1234 输出567，共修改了15处，以下为前3处：
-
-[1]
-原：嗯，这个XGBT很好用
-新：这个ChatGPT很好用
-
-[2]
-原：然后啊，就是我们可以用RG技术
-新：然后，我们可以用RAG技术
-```
-
-## 🚀 安装
-## 大模型 API_KEY 获取（必须！）
-注册领取API 16元代金券 https://cloud.siliconflow.cn/i/AEg95IPc
-
-获取SILICONFLOW_API_KEY：https://cloud.siliconflow.cn/me/account/ak
-
-### 在小龙虾聊天窗口发送：
-```bash
-安装技能：https://gitee.com/real__cool/subtitle_refiner 
-配置当前shell的环境变量：SILICONFLOW_API_KEY=sk-m******
-执行export SILICONFLOW_API_KEY=sk-m****** 命令使当前环境获取API_KEY
-```
-
-
-
-### 或手动操作
-```bash
-# 也可手动下载项目复制到 OpenClaw skills 目录
-cp -r subtitle_refiner ~/.openclaw/skills/subtitle-refiner
-# 配置环境变量到 .bashrc .zshrc
-export SILICONFLOW_API_KEY=sk-m******
-source .bashrc
-```
 
 
 ## 📖 使用方法
@@ -115,7 +99,6 @@ Agent：收到字幕文件，开始优化...
 ```
 
 
-
 ## ⚙️ 配置
 
 ### API 配置
@@ -125,14 +108,12 @@ Agent：收到字幕文件，开始优化...
 | 配置项 | 值 |
 |--------|-----|
 | Endpoint | `https://api.siliconflow.cn/v1/chat/completions` |
-| 主模型 | `Pro/zai-org/GLM-4.7` |
-| 备用模型 | `Qwen/Qwen2.5-7B-Instruct` |
+| 模型 | `Pro/zai-org/GLM-4.7` |
 
 如需更换模型，编辑 [`scripts/refine.py`](scripts/refine.py) 中的配置：
 
 ```python
 PRIMARY_MODEL = "Pro/zai-org/GLM-4.7"  # 主模型
-FALLBACK_MODEL = "Qwen/Qwen2.5-7B-Instruct"  # 备用模型
 ```
 
 ### 文件存储
@@ -258,29 +239,6 @@ python3 test_error_handling.py
 **解决方案**：
 - 等待指定时间后重试
 - 减少并发请求数
-
-### 测试错误处理
-
-运行测试脚本验证配置：
-
-```bash
-python3 test_error_handling.py
-```
-
-输出示例：
-```
-🧪 错误处理功能测试
-
-测试 1：网络连接检测
-✅ 网络连接正常
-
-测试 2：API Key 验证
-✅ API Key 有效
-
-测试 3：错误提示字典
-🔑 401: API Key 错误
-...
-```
 
 
 
