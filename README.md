@@ -20,7 +20,7 @@
 
 ## 🚀 安装
 ## 大模型 API_KEY 获取（必须！）
-注册领取API 16元代金券 https://cloud.siliconflow.cn/i/AEg95IPc
+注册领取硅基流动API 16元代金券 https://cloud.siliconflow.cn/i/AEg95IPc
 
 获取SILICONFLOW_API_KEY：https://cloud.siliconflow.cn/me/account/ak
 
