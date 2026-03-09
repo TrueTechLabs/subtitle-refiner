@@ -34,7 +34,7 @@
 ### 或手动操作
 ```bash
 # 也可手动下载项目复制到 OpenClaw skills 目录
-cp -r subtitle_refiner ~/.openclaw/skills/subtitle-refiner
+cp -r subtitle-refiner ~/.openclaw/skills/subtitle-refiner
 # 配置环境变量到 .bashrc .zshrc
 export SILICONFLOW_API_KEY=sk-m******
 source .bashrc
